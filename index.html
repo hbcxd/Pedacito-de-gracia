@@ -1,0 +1,714 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sistema de Almacén y Flujo de Caja en la Nube</title>
+    
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+
+    <style>
+        body { 
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+            margin: 0; 
+            padding: 15px; 
+            background-color: #F7EFE5; 
+            color: #3A2D28; 
+        }
+        
+        h1, h2, h3 { color: #3A2D28; margin-top: 0; font-weight: 600; text-align: center;}
+        h1 { font-size: 1.8rem; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 5px; }
+        h3 { font-size: 1rem; color: #7A6860; margin-bottom: 25px; font-style: italic; }
+
+        #pantalla-login {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background-color: #F7EFE5; display: flex; justify-content: center;
+            align-items: center; z-index: 9999;
+        }
+        .caja-login {
+            background: white; padding: 30px; border-radius: 16px;
+            border: 1px solid #EADBC8; text-align: center;
+            box-shadow: 0 10px 25px rgba(58, 45, 40, 0.08); width: 85%; max-width: 340px;
+        }
+
+        .contenedor-logo { text-align: center; margin-top: 10px; margin-bottom: 20px; }
+        .logo-reposteria {
+            width: 120px; height: 120px; object-fit: cover;
+            border-radius: 50%; border: 3px solid #EADBC8;
+            box-shadow: 0 4px 8px rgba(58, 45, 40, 0.1); margin-bottom: 10px;
+        }
+
+        .bloque-admin { 
+            background: #FFFFFF; padding: 20px; margin-bottom: 20px; 
+            border-radius: 12px; border: 1px solid #EADBC8;
+            box-shadow: 0 4px 12px rgba(58, 45, 40, 0.04); 
+        }
+        .bloque-admin h2 {
+            font-size: 1.25rem; border-bottom: 2px solid #F3DEBA;
+            padding-bottom: 8px; margin-bottom: 15px; text-align: left;
+        }
+
+        .grupo-input { margin-bottom: 15px; }
+        label { display: block; font-weight: bold; margin-bottom: 6px; font-size: 0.9rem; color: #5C4B43; }
+        input, select, textarea { 
+            width: 100%; padding: 11px; box-sizing: border-box; 
+            border: 1px solid #CBD5E1; border-radius: 8px; font-size: 0.95rem; 
+            background-color: #FAFAFA; color: #3A2D28; outline: none;
+            font-family: inherit;
+        }
+        input:focus, select:focus, textarea:focus { border-color: #B99470; }
+
+        .fila-config { display: flex; gap: 8px; margin-bottom: 8px; align-items: center; }
+        .fila-config span { flex: 1.2; font-weight: bold; font-size: 0.85rem; }
+        .fila-config input { flex: 1; padding: 8px; font-size: 0.85rem; text-align: center; border-radius: 6px; }
+        input[readonly] { background-color: #F1F5F9; color: #475569; border: 1px solid #E2E8F0; font-weight: bold; }
+
+        button { 
+            width: 100%; padding: 12px; font-weight: bold; border: none; 
+            border-radius: 8px; font-size: 0.95rem; cursor: pointer; transition: background-color 0.2s;
+        }
+        button.btn-guardar-vta { background-color: #6096B4; color: white; margin-bottom: 8px; }
+        button.btn-pendiente { background-color: #EEE3CB; color: #3A2D28; }
+        button.btn-config { background-color: #93B1A6; color: white; }
+        button.btn-stock { background-color: #B99470; color: white; }
+        button.btn-retiro { background-color: #CD5C5C; color: white; }
+        button.btn-pagar { background-color: #6096B4; color: white; padding: 6px 12px; width: auto; font-size: 0.8rem; border-radius: 6px; }
+        button.btn-revertir-inv { background-color: #F8FAFC; color: #64748B; border: 1px solid #E2E8F0; padding: 4px 8px; width: auto; font-size: 0.8rem; border-radius: 6px; }
+        button.btn-revertir-inv:hover { background-color: #F1F5F9; color: #CD5C5C; }
+        button.btn-eliminar-vta { background-color: #FFEAEB; color: #CD5C5C; border: 1px solid #FFA2A4; padding: 4px 8px; width: auto; font-size: 0.8rem; border-radius: 6px; font-weight: bold; }
+        button.btn-eliminar-vta:hover { background-color: #CD5C5C; color: white; }
+        button.btn-cerrar { background-color: #CD5C5C; color: white; margin-top: 10px; font-size: 0.85rem; padding: 8px; }
+
+        .contenedor-tabla { overflow-x: auto; margin-top: 10px; border-radius: 8px; border: 1px solid #E2E8F0; }
+        table { width: 100%; border-collapse: collapse; font-size: 0.85rem; background: white; }
+        th, td { padding: 10px 8px; text-align: center; border-bottom: 1px solid #F1F5F9; }
+        th { background-color: #F8FAFC; color: #64748B; font-weight: 600; text-transform: uppercase; font-size: 0.75rem; }
+        
+        .stock-alerta { color: #CD5C5C; font-weight: bold; background-color: #FFF5F5; padding: 2px 6px; border-radius: 4px; }
+        .badge { padding: 5px 8px; border-radius: 6px; font-size: 0.75rem; font-weight: bold; display: inline-block; }
+        .badge-pago { background-color: #E2F6EA; color: #14532D; }
+        .badge-deuda { background-color: #FFEAEB; color: #741B1F; }
+
+        .barra-totales {
+            margin-top: 12px; padding: 12px; border-radius: 8px;
+            font-size: 0.95rem; font-weight: bold; display: flex;
+            flex-direction: column; gap: 6px;
+        }
+        .totales-cuentas { background-color: #FFEAEB; border: 1px solid #FFA2A4; color: #741B1F; }
+        .totales-historico { background-color: #E2F1E8; border: 1px solid #A3D1B5; color: #1C442D; }
+        .totales-caja { background-color: #EBF3F5; border: 1px solid #B0D4DE; color: #1E4652; }
+        .fila-total-item { display: flex; justify-content: space-between; }
+    </style>
+</head>
+<body>
+
+    <div id="pantalla-login">
+        <div class="caja-login">
+            <h2>Pedacito de Gracia</h2>
+            <p style="font-size: 0.85rem; color: #7A6860; margin-bottom: 20px; font-style: italic;">Sistema de Almacén Compartido</p>
+            <div class="grupo-input">
+                <input type="password" id="input-password" placeholder="Contraseña del negocio" style="text-align: center;">
+            </div>
+            <button onclick="comprobarClave()" class="btn-guardar-vta">🔑 Entrar al Panel</button>
+        </div>
+    </div>
+
+    <div id="aplicacion-principal" style="display: none;">
+        
+        <div class="contenedor-logo">
+            <img src="IMAGENES/LOGO.png" alt="Logo Pedacito de Gracia" class="logo-reposteria">
+            <h1 style="font-family: 'Courier New', Courier, monospace; font-weight: bold;">Pedacito de Gracia</h1>
+            <h3>Sabor artesanal en cada capa</h3>
+        </div>
+
+        <div class="bloque-admin">
+            <h2>💵 Contabilidad de Caja (Dinero Real en Mano)</h2>
+            <p style="font-size: 0.85rem; color: #64748B; margin-top: -10px; margin-bottom: 15px;">Muestra el dinero físico neto disponible restando los egresos y gastos.</p>
+            
+            <div class="barra-totales totales-caja">
+                <div class="fila-total-item">
+                    <span>📦 Caja de Costos Disponible:</span>
+                    <span id="caja-costos-disponible">$0.00</span>
+                </div>
+                <div class="fila-total-item" style="border-bottom: 1px dashed #B0D4DE; padding-bottom: 6px;">
+                    <span>📈 Caja de Ganancias Disponible:</span>
+                    <span id="caja-ganancias-disponible">$0.00</span>
+                </div>
+                <div class="fila-total-item" style="padding-top: 6px; font-size: 1.1rem; color: #0F2930;">
+                    <span>💰 EFECTIVO TOTAL DISPONIBLE:</span>
+                    <span id="caja-total-disponible">$0.00</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="bloque-admin">
+            <h2>💸 Registrar Salida de Dinero / Retiro</h2>
+            <div class="grupo-input">
+                <label for="ret-caja">¿De qué caja extraer el dinero?</label>
+                <select id="ret-caja">
+                    <option value="Costos">Caja de Costos (Inversión/Materia Prima)</option>
+                    <option value="Ganancias">Caja de Ganancias (Utilidad Retirable)</option>
+                </select>
+            </div>
+            <div class="grupo-input">
+                <label for="ret-monto">Monto a retirar ($)</label>
+                <input type="number" id="ret-monto" step="0.01" min="0.01" placeholder="Ej. 10.50">
+            </div>
+            <div class="grupo-input">
+                <label for="ret-nota">Nota / Motivo del Retiro</label>
+                <textarea id="ret-nota" rows="2" placeholder="Ej. Compra de galletas María o Retiro personal de ganancia"></textarea>
+            </div>
+            <button onclick="registrarRetiro()" class="btn-retiro">💸 Procesar Retiro de Caja</button>
+
+            <h3 style="text-align: left; margin-top: 20px; margin-bottom: 10px; font-size: 1rem; color: #3A2D28; font-style: normal;">Historial de Retiros</h3>
+            <div class="contenedor-tabla">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Fecha</th>
+                            <th>Caja</th>
+                            <th>Monto</th>
+                            <th>Nota / Motivo</th>
+                        </tr>
+                    </thead>
+                    <tbody id="lista-retiros"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="bloque-admin">
+            <h2>⚙️ Configuración Económica ($)</h2>
+            <div class="grupo-input">
+                <div class="fila-config" style="border-bottom: 1px solid #F1F5F9; padding-bottom: 6px; margin-bottom: 10px;">
+                    <span style="color:#94A3B8; font-size:0.75rem; text-transform: uppercase;">Sabor</span>
+                    <span style="color:#94A3B8; font-size:0.75rem; text-transform: uppercase; text-align:center;">Costo F.</span>
+                    <span style="color:#94A3B8; font-size:0.75rem; text-transform: uppercase; text-align:center;">Ganancia</span>
+                    <span style="color:#94A3B8; font-size:0.75rem; text-transform: uppercase; text-align:center;">P. Venta</span>
+                </div>
+                <div class="fila-config">
+                    <span>🍫 Chocolate</span>
+                    <input type="number" id="cfg-costo-cho" step="0.01" oninput="calcularPrecioVentaAutomatico('cho')">
+                    <input type="number" id="cfg-ganancia-cho" step="0.01" oninput="calcularPrecioVentaAutomatico('cho')">
+                    <input type="number" id="cfg-venta-cho" readonly>
+                </div>
+                <div class="fila-config">
+                    <span>🍋 Limón</span>
+                    <input type="number" id="cfg-costo-lim" step="0.01" oninput="calcularPrecioVentaAutomatico('lim')">
+                    <input type="number" id="cfg-ganancia-lim" step="0.01" oninput="calcularPrecioVentaAutomatico('lim')">
+                    <input type="number" id="cfg-venta-lim" readonly>
+                </div>
+                <div class="fila-config">
+                    <span>🍊 Parchita</span>
+                    <input type="number" id="cfg-costo-par" step="0.01" oninput="calcularPrecioVentaAutomatico('par')">
+                    <input type="number" id="cfg-ganancia-par" step="0.01" oninput="calcularPrecioVentaAutomatico('par')">
+                    <input type="number" id="cfg-venta-par" readonly>
+                </div>
+            </div>
+            <button onclick="guardarConfiguracionFinanciera()" class="btn-config">💾 Guardar Precios en la Nube</button>
+        </div>
+
+        <div class="bloque-admin">
+            <h2>📦 Stock Disponible en Tiempo Real</h2>
+            <div class="contenedor-tabla">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Producto</th>
+                            <th>Existencia</th>
+                            <th>Costo</th>
+                            <th>P. Venta</th>
+                            <th>Ajustar</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tabla-inventario"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="bloque-admin">
+            <h2>📥 Cargar Nueva Finalización de Producción</h2>
+            <div class="grupo-input">
+                <label for="inv-producto">Marquesa de sabor</label>
+                <select id="inv-producto">
+                    <option value="Chocolate">🍫 Marquesa de Chocolate</option>
+                    <option value="Limón">🍋 Marquesa de Limón</option>
+                    <option value="Parchita">🍊 Marquesa de Parchita</option>
+                </select>
+            </div>
+            <div class="grupo-input">
+                <label for="inv-cantidad">Cantidad de unidades listas</label>
+                <input type="number" id="inv-cantidad" min="1" placeholder="Ej. 12">
+            </div>
+            <button onclick="agregarInventario()" class="btn-stock">📥 Surtir Almacén Común</button>
+        </div>
+
+        <div class="bloque-admin">
+            <h2>💰 Nueva Orden de Venta</h2>
+            <div class="grupo-input">
+                <label for="vta-cliente">Nombre del Cliente</label>
+                <input type="text" id="vta-cliente" placeholder="Nombre completo">
+            </div>
+            <div class="grupo-input">
+                <label for="vta-producto">Sabor solicitado</label>
+                <select id="vta-producto">
+                    <option value="Chocolate">🍫 Marquesa de Chocolate</option>
+                    <option value="Limón">🍋 Marquesa de Limón</option>
+                    <option value="Parchita">🍊 Marquesa de Parchita</option>
+                </select>
+            </div>
+            <div class="grupo-input">
+                <label for="vta-cantidad">Unidades vendidas</label>
+                <input type="number" id="vta-cantidad" min="1" placeholder="Cantidad">
+            </div>
+            <div class="grupo-input">
+                <label for="vta-fecha">Fecha</label>
+                <input type="date" id="vta-fecha">
+            </div>
+            <button onclick="procesarVenta(true)" class="btn-guardar-vta">✔️ Registrar Venta Pagada</button>
+            <button onclick="procesarVenta(false)" class="btn-pendiente">⏳ Registrar Por Pagar (Deuda)</button>
+        </div>
+
+        <div class="bloque-admin">
+            <h2>🚨 Cuentas por Cobrar</h2>
+            <div class="contenedor-tabla">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Cliente</th>
+                            <th>Producto</th>
+                            <th>Cant.</th>
+                            <th>Fecha</th>
+                            <th>Monto</th>
+                            <th>Acción</th>
+                        </tr>
+                    </thead>
+                    <tbody id="lista-pendientes"></tbody>
+                </table>
+            </div>
+            <div class="barra-totales totales-cuentas">
+                <div class="fila-total-item">
+                    <span>🔴 Total por Cobrar Pendiente:</span>
+                    <span id="total-por-cobrar">$0.00</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="bloque-admin">
+            <h2>📈 Libro Histórico Compartido</h2>
+            <div class="contenedor-tabla">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Cliente</th>
+                            <th>Producto</th>
+                            <th>Cant.</th>
+                            <th>Fecha</th>
+                            <th>Monto</th>
+                            <th>Costo</th>
+                            <th>Ganancia</th>
+                            <th>Estado</th>
+                            <th>Acción</th>
+                        </tr>
+                    </thead>
+                    <tbody id="lista-historico"></tbody>
+                </table>
+            </div>
+            <div class="barra-totales totales-historico">
+                <div class="fila-total-item">
+                    <span>💵 Total Ingresos Brutos (Acumulado):</span>
+                    <span id="total-monto-historico">$0.00</span>
+                </div>
+                <div class="fila-total-item" style="font-weight: 500; font-size: 0.85rem; opacity: 0.85; border-bottom: 1px dashed #A3D1B5; padding-bottom: 4px;">
+                    <span>📉 Total Inversión de Costos Teóricos:</span>
+                    <span id="total-costo-historico">$0.00</span>
+                </div>
+                <div class="fila-total-item" style="padding-top: 4px; font-size: 1.05rem;">
+                    <span>🎉 GANANCIA BRUTA HISTÓRICA:</span>
+                    <span id="total-ganancia-historico">$0.00</span>
+                </div>
+            </div>
+            <button onclick="cerrarSesion()" class="btn-cerrar">🔒 Salir del Sistema</button>
+        </div>
+
+    </div>
+
+    <script>
+        const PASSWORD_SISTEMA = "Ap-20092024"; 
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyD5avbE32_40KPKXi7e5qB5rnXtUVY8ZPQ",
+            authDomain: "pedacito-de-gracia.firebaseapp.com",
+            databaseURL: "https://pedacito-de-gracia-default-rtdb.firebaseio.com",
+            projectId: "pedacito-de-gracia",
+            storageBucket: "pedacito-de-gracia.firebasestorage.app",
+            messagingSenderId: "181376398025",
+            appId: "1:181376398025:web:3f9bda77ecb92ce625d318",
+            measurementId: "G-HFLE5LS49K"
+        };
+
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.database();
+
+        let infoFinanciera = {
+            "Chocolate": { costo: 1.50, ganancia: 1.50, venta: 3.00 },
+            "Limón":     { costo: 1.20, ganancia: 1.30, venta: 2.50 },
+            "Parchita":  { costo: 1.30, ganancia: 1.20, venta: 2.50 }
+        };
+        let inventario = { "Chocolate": 0, "Limón": 0, "Parchita": 0 };
+        let registros = [];
+        let retiros = []; 
+
+        document.getElementById('vta-fecha').value = new Date().toISOString().split('T')[0];
+
+        function comprobarClave() {
+            const claveIngresada = document.getElementById('input-password').value;
+            if (claveIngresada === PASSWORD_SISTEMA) {
+                localStorage.setItem('pedacito_sesion', 'activa');
+                document.getElementById('pantalla-login').style.display = 'none';
+                document.getElementById('aplicacion-principal').style.display = 'block';
+                conectarYEscucharBaseDatos();
+            } else {
+                alert("❌ Contraseña incorrecta. Inténtalo de nuevo.");
+            }
+        }
+
+        function cerrarSesion() {
+            localStorage.removeItem('pedacito_sesion');
+            location.reload();
+        }
+
+        function conectarYEscucharBaseDatos() {
+            if (!db) return;
+
+            db.ref('infoFinanciera').on('value', (snapshot) => {
+                if (snapshot.exists()) {
+                    infoFinanciera = snapshot.val();
+                    inicializarInputsConfig();
+                } else {
+                    db.ref('infoFinanciera').set(infoFinanciera);
+                }
+                actualizarTablasEnPantalla();
+            });
+
+            db.ref('inventario').on('value', (snapshot) => {
+                if (snapshot.exists()) {
+                    inventario = snapshot.val();
+                } else {
+                    db.ref('inventario').set(inventario);
+                }
+                actualizarTablasEnPantalla();
+            });
+
+            db.ref('registros').on('value', (snapshot) => {
+                registros = snapshot.exists() ? snapshot.val() : [];
+                actualizarTablasEnPantalla();
+            });
+
+            db.ref('retiros').on('value', (snapshot) => {
+                retiros = snapshot.exists() ? snapshot.val() : [];
+                actualizarTablasEnPantalla();
+            });
+        }
+
+        function calcularPrecioVentaAutomatico(saborAcr) {
+            const costo = parseFloat(document.getElementById(`cfg-costo-${saborAcr}`).value) || 0;
+            const ganancia = parseFloat(document.getElementById(`cfg-ganancia-${saborAcr}`).value) || 0;
+            document.getElementById(`cfg-venta-${saborAcr}`).value = (costo + ganancia).toFixed(2);
+        }
+
+        function inicializarInputsConfig() {
+            const mapeo = { "cho": "Chocolate", "lim": "Limón", "par": "Parchita" };
+            for (const acr in mapeo) {
+                const saborReal = mapeo[acr];
+                if(infoFinanciera[saborReal]) {
+                    document.getElementById(`cfg-costo-${acr}`).value = infoFinanciera[saborReal].costo;
+                    document.getElementById(`cfg-ganancia-${acr}`).value = infoFinanciera[saborReal].ganancia || (infoFinanciera[saborReal].venta - infoFinanciera[saborReal].costo);
+                    calcularPrecioVentaAutomatico(acr);
+                }
+            }
+        }
+
+        function guardarConfiguracionFinanciera() {
+            const cCho = parseFloat(document.getElementById('cfg-costo-cho').value) || 0;
+            const gCho = parseFloat(document.getElementById('cfg-ganancia-cho').value) || 0;
+            const cLim = parseFloat(document.getElementById('cfg-costo-lim').value) || 0;
+            const gLim = parseFloat(document.getElementById('cfg-ganancia-lim').value) || 0;
+            const cPar = parseFloat(document.getElementById('cfg-costo-par').value) || 0;
+            const gPar = parseFloat(document.getElementById('cfg-ganancia-par').value) || 0;
+
+            infoFinanciera["Chocolate"] = { costo: cCho, ganancia: gCho, venta: cCho + gCho };
+            infoFinanciera["Limón"]     = { costo: cLim, ganancia: gLim, venta: cLim + gLim };
+            infoFinanciera["Parchita"]  = { costo: cPar, ganancia: gPar, venta: cPar + gPar };
+
+            if (db) db.ref('infoFinanciera').set(infoFinanciera);
+            alert("☁️ Precios guardados e informados a todos los dispositivos conectados.");
+        }
+
+        function actualizarTablasEnPantalla() {
+            // 1. Renderizar Tabla Inventario con botón de ajuste rápido
+            const tbodyInv = document.getElementById('tabla-inventario');
+            tbodyInv.innerHTML = '';
+            for (const producto in inventario) {
+                const fila = document.createElement('tr');
+                const stock = inventario[producto] || 0;
+                const celdaStock = stock <= 3 ? `<span class="stock-alerta">${stock} unds.</span>` : `${stock} unds.`;
+                const costoUnidad = infoFinanciera[producto] ? infoFinanciera[producto].costo.toFixed(2) : "0.00";
+                const ventaUnidad = infoFinanciera[producto] ? infoFinanciera[producto].venta.toFixed(2) : "0.00";
+
+                fila.innerHTML = `
+                    <td style="font-weight:600;">${producto}</td>
+                    <td>${celdaStock}</td>
+                    <td>$${costoUnidad}</td>
+                    <td style="font-weight:600; color:#B99470;">$${ventaUnidad}</td>
+                    <td><button class="btn-revertir-inv" onclick="revertirStock('${producto}')">↩️ Quitar</button></td>
+                `;
+                tbodyInv.appendChild(fila);
+            }
+
+            // 2. Renderizar Tablas de Ventas e Históricos
+            const tbodyPendientes = document.getElementById('lista-pendientes');
+            const tbodyHistorico = document.getElementById('lista-historico');
+            tbodyPendientes.innerHTML = '';
+            tbodyHistorico.innerHTML = '';
+
+            let acumuladoPorCobrar = 0;
+            let acumuladoMontoHistorico = 0;
+            let acumuladoCostoHistorico = 0;
+            let acumuladoGananciaHistorico = 0;
+
+            let dineroCajaCostosBruto = 0;
+            let dineroCajaGananciasBruto = 0;
+
+            registros.forEach((item, index) => {
+                if (!item) return;
+
+                if (!item.pagado) {
+                    acumuladoPorCobrar += item.monto;
+                    const filaPendiente = document.createElement('tr');
+                    filaPendiente.innerHTML = `
+                        <td>${item.cliente}</td>
+                        <td>${item.producto}</td>
+                        <td>${item.cantidad}</td>
+                        <td>${item.fecha}</td>
+                        <td style="font-weight:600;">$${item.monto.toFixed(2)}</td>
+                        <td><button class="btn-pagar" onclick="marcarComoPagado(${index})">💵 Pagó</button></td>
+                    `;
+                    tbodyPendientes.appendChild(filaPendiente);
+                } else {
+                    dineroCajaCostosBruto += item.costoTotal || 0;
+                    dineroCajaGananciasBruto += item.gananciaTotal || 0;
+                }
+
+                acumuladoMontoHistorico += item.monto;
+                acumuladoCostoHistorico += item.costoTotal || 0;
+                acumuladoGananciaHistorico += item.gananciaTotal || 0;
+
+                const filaHistorico = document.createElement('tr');
+                const badgeEstado = item.pagado ? '<span class="badge badge-pago">Pagado</span>' : '<span class="badge badge-deuda">Pendiente</span>';
+                filaHistorico.innerHTML = `
+                    <td style="font-weight:600;">${item.cliente}</td>
+                    <td>${item.producto}</td>
+                    <td>${item.cantidad}</td>
+                    <td>${item.fecha}</td>
+                    <td>$${item.monto.toFixed(2)}</td>
+                    <td style="color:#9E7676;">$${(item.costoTotal || 0).toFixed(2)}</td>
+                    <td style="color:#4E6C50; font-weight:600;">+$${(item.gananciaTotal || 0).toFixed(2)}</td>
+                    <td>${badgeEstado}</td>
+                    <td><button class="btn-eliminar-vta" onclick="eliminarRegistroVenta(${index})">❌</button></td>
+                `;
+                tbodyHistorico.appendChild(filaHistorico);
+            });
+
+            // 3. Renderizar Tabla de Retiros
+            const tbodyRetiros = document.getElementById('lista-retiros');
+            tbodyRetiros.innerHTML = '';
+            
+            let totalRetiradoCostos = 0;
+            let totalRetiradoGanancias = 0;
+
+            retiros.forEach((ret) => {
+                if (!ret) return;
+                
+                if (ret.caja === "Costos") {
+                    totalRetiradoCostos += ret.monto;
+                } else if (ret.caja === "Ganancias") {
+                    totalRetiradoGanancias += ret.monto;
+                }
+
+                const filaRet = document.createElement('tr');
+                filaRet.innerHTML = `
+                    <td>${ret.fecha}</td>
+                    <td style="font-weight:600;">${ret.caja}</td>
+                    <td style="color:#CD5C5C; font-weight:600;">-$${ret.monto.toFixed(2)}</td>
+                    <td style="text-align:left; font-style:italic;">${ret.nota}</td>
+                `;
+                tbodyRetiros.appendChild(filaRet);
+            });
+
+            const cajaCostosNeto = dineroCajaCostosBruto - totalRetiradoCostos;
+            const cajaGananciasNeto = dineroCajaGananciasBruto - totalRetiradoGanancias;
+            const efectivoTotalNeto = cajaCostosNeto + cajaGananciasNeto;
+
+            document.getElementById('caja-costos-disponible').innerText = "$" + cajaCostosNeto.toFixed(2);
+            document.getElementById('caja-ganancias-disponible').innerText = "$" + cajaGananciasNeto.toFixed(2);
+            document.getElementById('caja-total-disponible').innerText = "$" + efectivoTotalNeto.toFixed(2);
+
+            document.getElementById('total-por-cobrar').innerText = "$" + acumuladoPorCobrar.toFixed(2);
+            document.getElementById('total-monto-historico').innerText = "$" + acumuladoMontoHistorico.toFixed(2);
+            document.getElementById('total-costo-historico').innerText = "$" + acumuladoCostoHistorico.toFixed(2);
+            document.getElementById('total-ganancia-historico').innerText = "$" + acumuladoGananciaHistorico.toFixed(2);
+        }
+
+        // NUEVA FUNCIÓN: Restar o corregir entradas mal hechas al Stock común
+        function revertirStock(producto) {
+            const cantidadString = prompt(`¿Cuántas unidades de Marquesa de ${producto} deseas RESTAR del stock por error de tipeo?:`);
+            const cantidad = parseInt(cantidadString);
+            
+            if (isNaN(cantidad) || cantidad <= 0) return;
+            
+            if ((inventario[producto] || 0) < cantidad) {
+                return alert("⚠️ No puedes restar más unidades de las que hay actualmente disponibles en existencia.");
+            }
+            
+            inventario[producto] -= cantidad;
+            if (db) db.ref('inventario').set(inventario);
+            alert(`↩️ Se han retirado ${cantidad} unidades de ${producto} del almacén.`);
+        }
+
+        // NUEVA FUNCIÓN: Eliminar una venta por completo y reajustar caja/stock
+        function eliminarRegistroVenta(index) {
+            const item = registros[index];
+            if (!item) return;
+
+            const confirmar = confirm(`¿Estás seguro de que deseas ELIMINAR por completo la orden de "${item.cliente}" por $${item.monto.toFixed(2)}? Esta acción modificará las cuentas virtuales.`);
+            if (!confirmar) return;
+
+            if (item.pagado) {
+                // Si ya fue pagada, preguntar si los dulces físicos se regresan al estante
+                const devolverStock = confirm("¿Deseas DEVOLVER las unidades vendidas de regreso al Stock disponible?");
+                if (devolverStock) {
+                    inventario[item.producto] = (inventario[item.producto] || 0) + item.cantidad;
+                }
+            }
+
+            // Quitar el elemento del array global
+            registros.splice(index, 1);
+
+            // Subir los cambios sincronizados a Firebase
+            if (db) {
+                db.ref('inventario').set(inventario);
+                db.ref('registros').set(registros);
+            }
+            alert("❌ Venta eliminada con éxito de la base de datos.");
+        }
+
+        function registrarRetiro() {
+            const cajaSeleccionada = document.getElementById('ret-caja').value;
+            const monto = parseFloat(document.getElementById('ret-monto').value);
+            const nota = document.getElementById('ret-nota').value.trim();
+            const fechaHoy = new Date().toISOString().split('T')[0];
+
+            if (isNaN(monto) || monto <= 0 || !nota) {
+                return alert("❌ Por favor indica un monto válido y añade una nota explicando el motivo.");
+            }
+
+            const totalCostosActual = parseFloat(document.getElementById('caja-costos-disponible').innerText.replace('$', ''));
+            const totalGananciasActual = parseFloat(document.getElementById('caja-ganancias-disponible').innerText.replace('$', ''));
+
+            if (cajaSeleccionada === "Costos" && monto > totalCostosActual) {
+                return alert(`⚠️ Fondos insuficientes en Caja de Costos. Máximo disponible: $${totalCostosActual.toFixed(2)}`);
+            }
+            if (cajaSeleccionada === "Ganancias" && monto > totalGananciasActual) {
+                return alert(`⚠️ Fondos insuficientes en Caja de Ganancias. Máximo disponible: $${totalGananciasActual.toFixed(2)}`);
+            }
+
+            const nuevoRetiro = {
+                fecha: fechaHoy,
+                caja: cajaSeleccionada,
+                monto: monto,
+                nota: nota
+            };
+
+            retiros.push(nuevoRetiro);
+
+            document.getElementById('ret-monto').value = '';
+            document.getElementById('ret-nota').value = '';
+
+            if (db) db.ref('retiros').set(retiros);
+            alert(`💸 Retiro de $${monto.toFixed(2)} procesado con éxito de la caja de ${cajaSeleccionada}.`);
+        }
+
+        function agregarInventario() {
+            const producto = document.getElementById('inv-producto').value;
+            const cantidad = parseInt(document.getElementById('inv-cantidad').value);
+            if (isNaN(cantidad) || cantidad <= 0) return alert("❌ Ingrese cantidad válida.");
+
+            if (inventario[producto] === undefined) inventario[producto] = 0;
+            inventario[producto] += cantidad;
+            
+            document.getElementById('inv-cantidad').value = ''; 
+            
+            if(db) db.ref('inventario').set(inventario);
+            alert(`📥 Inventario común actualizado con ${cantidad} unidades.`);
+        }
+
+        function procesarVenta(estaPagado) {
+            const cliente = document.getElementById('vta-cliente').value.trim();
+            const producto = document.getElementById('vta-producto').value;
+            const cantidad = parseInt(document.getElementById('vta-cantidad').value);
+            const fecha = document.getElementById('vta-fecha').value;
+
+            if (!cliente || isNaN(cantidad) || cantidad <= 0 || !fecha) return alert("❌ Complete todos los campos.");
+            if (estaPagado && (inventario[producto] || 0) < Math.abs(cantidad)) return alert(`⚠️ Almacén sin stock suficiente.`);
+
+            const precioUnidad = infoFinanciera[producto] ? infoFinanciera[producto].venta : 0;
+            const costoUnidad = infoFinanciera[producto] ? infoFinanciera[producto].costo : 0;
+
+            const montoTotal = precioUnidad * cantidad;
+            const costoTotal = costoUnidad * cantidad;
+
+            if (estaPagado) inventario[producto] -= cantidad;
+
+            const nuevoRegistro = {
+                cliente: cliente, producto: producto, cantidad: cantidad, fecha: fecha,
+                monto: montoTotal, costoTotal: costoTotal, gananciaTotal: montoTotal - costoTotal,
+                pagado: estaPagado
+            };
+
+            registros.push(nuevoRegistro);
+            
+            document.getElementById('vta-cliente').value = '';
+            document.getElementById('vta-cantidad').value = '';
+
+            if(db) {
+                db.ref('inventario').set(inventario);
+                db.ref('registros').set(registros);
+            }
+            alert("✔️ Transacción enviada a la nube.");
+        }
+
+        function marcarComoPagado(index) {
+            const item = registros[index];
+            if ((inventario[item.producto] || 0) < item.cantidad) return alert(`⚠️ Almacén sin stock suficiente.`);
+            
+            inventario[item.producto] -= item.cantidad; 
+            item.pagado = true; 
+
+            if(db) {
+                db.ref('inventario').set(inventario);
+                db.ref('registros').set(registros);
+            }
+            alert(`💵 Venta liquidada.`);
+        }
+
+        window.onload = () => {
+            if (localStorage.getItem('pedacito_sesion') === 'activa') {
+                document.getElementById('pantalla-login').style.display = 'none';
+                document.getElementById('aplicacion-principal').style.display = 'block';
+                conectarYEscucharBaseDatos();
+            }
+        };
+    </script>
+</body>
+</html>
